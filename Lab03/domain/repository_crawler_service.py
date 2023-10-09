@@ -1,29 +1,22 @@
-from Lab01.external.github_api import GithubApi
+from Lab03.github_api.api_rest import GithubApiRest
+from Lab03.github_api.api_graphql import GithubApiGraphql
 
 
 class RepositoryCrawlerService:
 
     def __init__(self):
-        self.github_api = GithubApi()
+        self.github_api_rest = GithubApiRest()
+        self.github_api_graphql = GithubApiGraphql()
 
     def crawl(self, cursor=""):
-        data_json = self.github_api.top_repos_query(cursor)
+        data_json = self.github_api_graphql.top_repos_query_with_prs(cursor)
         if 'error' in data_json:
             raise Exception(f"Unexpected error: {data_json}")
-        data = data_json['data']['search']['edges']
+        result_data = data_json['data']['search']['edges']
         cursor = data_json['data']['search']['pageInfo']['endCursor']
         repos = []
-
-        count = 0
-        for node in data:
-            repo = node['node']
-            search_id = repo['nameWithOwner']
-            print(f"{count}. Getting details for {search_id}")
-            details = self.github_api.repo_details_query(search_id)['data']['search']['edges'][0]['node']
-            if 'error' in details:
-                raise Exception(f"Unexpected error: {data_json}")
-            repo['details'] = details
-            repos.append(repo)
-            count += 1
+        for data in result_data:
+            if data['node']['pullRequests']['totalCount'] > 100:
+                repos.append(data['node'])
 
         return {"repos": repos, "cursor": cursor}

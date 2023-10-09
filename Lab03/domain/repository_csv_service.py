@@ -1,4 +1,4 @@
-from Lab01.domain.repository_model import Repository
+from Lab03.domain.repository_model import Repository
 import csv
 import os
 
@@ -13,6 +13,7 @@ class RepositoryCsvService:
         self.writer = None
         self.reader = None
         self.file = None
+        self.lines = 0
 
     def reset_internal(self):
         self.file.close()
@@ -27,12 +28,17 @@ class RepositoryCsvService:
         if os.path.exists(self.FILE_NAME):
             os.remove(self.FILE_NAME)
 
-    def start_writer(self):
+    def start_writer(self, open_mode="w"):
         if self.mode is not None:
             self.reset_internal()
 
         self.mode = self.WRITING_MODE
-        self.file = open(self.FILE_NAME, "w", newline='', encoding='utf-8')
+        self.file = open(self.FILE_NAME, open_mode, newline='', encoding='utf-8')
+        if open_mode == "r":
+            self.lines = len(self.file.readlines())
+            self.file.flush()
+            self.file.close()
+            self.file = open(self.FILE_NAME, 'a', newline='', encoding='utf-8')
         self.writer = csv.writer(self.file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
     def write_header(self):

@@ -5,7 +5,7 @@ import http
 import json
 
 
-class GithubApi:
+class GithubApiGraphql:
     URL = "https://api.github.com/graphql"
     HEADERS = {"Authorization": "Bearer " + env_config('TOKEN')}
 
@@ -60,6 +60,32 @@ class GithubApi:
     }
     """)
 
+    QUERY_TOP_REPOS_WITH_100_OR_HIGHER_PRS = Template(
+        """
+        {
+          search(query: "stars:>10000", type: REPOSITORY, first: $per_page, $pagination) {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            edges {
+              node {
+                ... on Repository {
+                  id
+                  nameWithOwner
+                  url
+                  stargazerCount
+                  pullRequests(states: [MERGED, CLOSED]) {
+                    totalCount
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+    )
+
     def top_repos_query(self, cursor=""):
         pagination = cursor
         if cursor != "":
@@ -67,6 +93,25 @@ class GithubApi:
 
         query = self.QUERY_TOP_REPOS.substitute(pagination=pagination)
         request = requests.post(self.URL, json={'query': query}, headers=self.HEADERS, timeout=60)
+        if request.status_code == http.HTTPStatus.OK:
+            try:
+                response_json = request.json()
+            except json.JSONDecodeError:
+                response_json = {
+                    'error': 'JSON Error',
+                    'info': request.text
+                }
+            return response_json
+        else:
+            raise Exception(f"Unexpected status code returned: {request.status_code}. With response {request.json()}")
+
+    def top_repos_query_with_prs(self, cursor="", per_page=5):
+        pagination = cursor
+        if cursor != "":
+            pagination = Template(""", after: "$cursor" """).substitute(cursor=cursor)
+
+        query = self.QUERY_TOP_REPOS_WITH_100_OR_HIGHER_PRS.substitute(pagination=pagination, per_page=per_page)
+        request = requests.post(self.URL, json={'query': query}, headers=self.HEADERS, timeout=120)
         if request.status_code == http.HTTPStatus.OK:
             try:
                 response_json = request.json()
