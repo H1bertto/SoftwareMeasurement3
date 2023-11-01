@@ -25,32 +25,51 @@ class RepositoryCrawlerService:
     def crawl_rest(self, repos):
         page = 1
         for repo in repos:
-            data_pulls_json = self.github_api_rest.repos_pulls(repo.name_with_owner, page)
-            for data in data_pulls_json:
-                data_reviews_json = self.github_api_rest.pulls_review_comments(repo.name_with_owner, data['number'])
-                reviews_count = len(data_reviews_json)
+            prs_json = self.github_api_rest.pull_requests(repo.name_with_owner)
+            for pr in prs_json:
+                user_reviews_json = self.github_api_rest.pulls_reviews(repo.name_with_owner, pr['number'])
+                user_comments_json = self.github_api_rest.pulls_comments(repo.name_with_owner, pr['number'])
+                files_json = self.github_api_rest.pulls_review_files(repo.name_with_owner, pr['number'])
+
+                lines_changed = 0
+                files_changed = len(files_json)
+                for file in files_json:
+                    lines_changed += file["changes"]
+
+                reviews_count = len(user_reviews_json)
                 if reviews_count > 0:
-                    created_at = datetime.strptime(data['created_at'], '%Y-%m-%dT%H:%M:%SZ')
-                    closed_at = datetime.strptime(data['closed_at'], '%Y-%m-%dT%H:%M:%SZ')
-                    time_diff = closed_at - created_at
+
+                    created_at = datetime.strptime(pr['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                    time_diff = None
+
+                    if 'merged_at' in pr:
+                        merged_at = datetime.strptime(pr['merged_at'], '%Y-%m-%dT%H:%M:%SZ')
+                        time_diff = merged_at - created_at
+                    else:
+                        closed_at = datetime.strptime(pr['closed_at'], '%Y-%m-%dT%H:%M:%SZ')
+                        time_diff = closed_at - created_at
+
                     if time_diff > timedelta(hours=1):
-                        size = data['size']
-                        body_length = len(data['body'])
-                        description_length = len(data['description'])
+
+                        body_length = len(pr['body']) + len(pr['title'])
                         users = []
-                        for review in data_reviews_json:
+                        for review in user_reviews_json:
                             if review['user']['id'] not in users:
                                 users.append(review['user']['id'])
+                        for comment in user_comments_json:
+                            if comment['user']['id'] not in users:
+                                users.append(comment['user']['id'])
+
                         users_count = len(users)
                         interaction = {
                             'participantes': users_count,
                             'comentários': reviews_count
                         }
                         result = {
-                            'Tamanho': size,
+                            'Quantidade Arquivos': files_changed,
+                            'Quantidade de Linhas': lines_changed,
                             'Tempo de Análise': time_diff,
                             'Descrição': body_length,
-                            'Descrição 2': description_length,
                             'Interações': interaction,
                         }
                         print(result)
